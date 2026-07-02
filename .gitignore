@@ -30,3 +30,6 @@ Thumbs.db
 # Download staging
 releases/*
 !releases/.gitkeep
+
+# Local generation output
+outputs/

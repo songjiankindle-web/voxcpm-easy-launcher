@@ -6,3 +6,7 @@
 | `dubcue-mark.png` | Square DubCue application mark and canonical source for desktop/mobile icon generation. |
 
 These approved raster files preserve the selected design. They are the project source of truth and should not be reconstructed from earlier concepts or converted to vector form unless a future redesign is explicitly approved.
+
+## Fuki / 吹替
+
+The approved Fuki visual assets are stored in [`fuki/`](fuki/). Its original raster design is the source of truth; the accompanying PNG files are direct crops and size exports. No vector reconstruction is approved.
