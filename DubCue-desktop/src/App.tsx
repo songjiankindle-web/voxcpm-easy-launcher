@@ -47,15 +47,19 @@ import { CURRENT_PROVIDER_ID, MODEL_GOALS, MODEL_PROVIDERS, type ModelGoal, type
 import {
   autosaveWorkspace,
   isDesktopApp,
+  installModelProvider,
   loadAutosave,
   openExternalUrl,
   openLogs,
+  providerInstallStatus,
   runtimeStatus,
   saveAudioFile,
   saveProjectFile,
   startBackend,
+  watchProviderInstall,
   watchRuntime,
   type NativeWorkspace,
+  type ProviderInstallStatus,
   type RuntimeStatus,
 } from "./desktop";
 import "./App.css";
@@ -497,6 +501,8 @@ function App() {
   const [modelWizardOpen, setModelWizardOpen] = useState(false);
   const [modelGoal, setModelGoal] = useState<ModelGoal>("general");
   const [manualModelMode, setManualModelMode] = useState<"directory" | "api" | "adapter">("directory");
+  const [providerInstall, setProviderInstall] = useState<ProviderInstallStatus | null>(null);
+  const [providerInstallConsent, setProviderInstallConsent] = useState<Record<string, boolean>>({});
   const [runtime, setRuntime] = useState<RuntimeStatus | null>(null);
   const [nativeProjectPath, setNativeProjectPath] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
@@ -640,6 +646,29 @@ function App() {
     language === "zh" ? "设为当前模型" : "Set current model",
   ];
   const activeInstallStep = runtime?.status === "downloading" ? 1 : runtime?.status === "verifying" ? 2 : runtime?.status === "starting" ? 3 : backendHealth ? 5 : 0;
+  const providerStatusLabel = (provider: ModelProvider) => {
+    if (provider.id === CURRENT_PROVIDER_ID) return language === "zh" ? "已接入" : "Available";
+    if (provider.status === "experimental") return language === "zh" ? "实验性自动安装" : "Experimental install";
+    if (provider.status === "available") return language === "zh" ? "可用" : "Available";
+    return language === "zh" ? "即将支持" : "Planned";
+  };
+  const providerInstallSteps = [
+    language === "zh" ? "环境检查" : "Environment",
+    language === "zh" ? "下载仓库" : "Source",
+    language === "zh" ? "安装依赖" : "Dependencies",
+    language === "zh" ? "下载权重" : "Weights",
+    language === "zh" ? "检查文件" : "Smoke test",
+    language === "zh" ? "完成登记" : "Ready",
+  ];
+  const providerInstallStepIndex = (status?: ProviderInstallStatus | null) => {
+    if (!status) return 0;
+    if (status.stage === "source") return 1;
+    if (status.stage === "python" || status.stage === "dependencies") return 2;
+    if (status.stage === "model") return 3;
+    if (status.stage === "smokeTest") return 4;
+    if (status.status === "ready") return 5;
+    return 0;
+  };
 
   const statusCopy = useMemo(
     () => ({ pending: t.idle, generating: t.processing, done: t.ready, error: t.failed }),
@@ -682,6 +711,15 @@ function App() {
       }
       window.localStorage.setItem("dubcue.native-migration.v1", "complete");
     })().catch((error) => setBackendError(String(error)));
+    return () => { disposed = true; unlisten?.(); };
+  }, []);
+
+  useEffect(() => {
+    if (!isDesktopApp()) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void watchProviderInstall((value) => { if (!disposed) setProviderInstall(value); }).then((dispose) => { unlisten = dispose; });
+    void providerInstallStatus().then((value) => { if (!disposed) setProviderInstall(value); }).catch(() => {});
     return () => { disposed = true; unlisten?.(); };
   }, []);
 
@@ -1159,6 +1197,31 @@ function App() {
       const message = readableModelError(error instanceof Error ? error.message : String(error));
       setBackendError(message);
       setRuntime((current) => current ? { ...current, status: "error", message } : current);
+    }
+  };
+
+  const startProviderInstall = async (provider: ModelProvider) => {
+    if (!isDesktopApp()) {
+      setBackendError(language === "zh" ? "自动安装只在桌面 App 中可用；网页开发模式下请先使用手动接入。" : "Managed install is only available in the desktop app. Use manual connection in the web preview.");
+      return;
+    }
+    setBackendError("");
+    try {
+      const status = await installModelProvider(provider.id, Boolean(providerInstallConsent[provider.id]));
+      setProviderInstall(status);
+    } catch (error) {
+      const message = readableModelError(error instanceof Error ? error.message : String(error));
+      setBackendError(message);
+      setProviderInstall((current) => ({
+        providerId: provider.id,
+        status: "error",
+        stage: current?.stage || "install",
+        message,
+        humanMessage: message,
+        progress: current?.progress || 0,
+        installDir: current?.installDir,
+        errorCode: current?.errorCode || "frontend",
+      }));
     }
   };
 
@@ -2577,14 +2640,19 @@ function App() {
                 ))}
               </div>
               <div className="recommended-models">
-                {recommendedProviders.map((provider) => (
+                {recommendedProviders.map((provider) => {
+                  const installForProvider = providerInstall?.providerId === provider.id ? providerInstall : null;
+                  const needsConsent = provider.id === "spark-tts";
+                  const canInstall = provider.status === "experimental" && provider.capabilities.installMode === "managed";
+                  const consented = Boolean(providerInstallConsent[provider.id]);
+                  return (
                   <article className={`model-recommendation ${provider.status}`} key={provider.id}>
                     <div className="model-recommendation-heading">
                       <span>
                         <strong>{provider.name}</strong>
                         <small>{provider.bestFor[language]}</small>
                       </span>
-                      <b>{provider.status === "available" ? (language === "zh" ? "已接入" : "Available") : (language === "zh" ? "即将支持" : "Planned")}</b>
+                      <b>{providerStatusLabel(provider)}</b>
                     </div>
                     <p>{provider.summary[language]}</p>
                     <div className="capability-tags">
@@ -2596,16 +2664,55 @@ function App() {
                       <div><dt>{language === "zh" ? "硬件建议" : "Hardware"}</dt><dd>{provider.hardwareHint[language]}</dd></div>
                       <div><dt>{language === "zh" ? "授权提示" : "License"}</dt><dd>{provider.licenseNote[language]}</dd></div>
                     </dl>
+                    {needsConsent && (
+                      <label className="provider-consent">
+                        <input
+                          type="checkbox"
+                          checked={consented}
+                          onChange={(event) => setProviderInstallConsent((current) => ({ ...current, [provider.id]: event.target.checked }))}
+                        />
+                        <span>{language === "zh"
+                          ? "我已了解 Spark-TTS 的官方授权与音色克隆使用风险；只会使用有权使用的参考声音。"
+                          : "I understand Spark-TTS licensing and voice-cloning risks, and will only use reference voices I have rights to use."}</span>
+                      </label>
+                    )}
+                    {installForProvider && installForProvider.status !== "idle" && (
+                      <div className={`provider-install-status ${installForProvider.status}`}>
+                        <div>
+                          <strong>{installForProvider.humanMessage || installForProvider.message}</strong>
+                          <small>{installForProvider.stage} · {Math.round(installForProvider.progress * 100)}%</small>
+                        </div>
+                        <div className="provider-install-bar"><span style={{ width: `${Math.round(installForProvider.progress * 100)}%` }} /></div>
+                        <div className="provider-install-steps">
+                          {providerInstallSteps.map((step, index) => (
+                            <span className={index === providerInstallStepIndex(installForProvider) ? "active" : index < providerInstallStepIndex(installForProvider) ? "done" : ""} key={step}>{step}</span>
+                          ))}
+                        </div>
+                        {installForProvider.installDir && <small>{language === "zh" ? "安装位置：" : "Install folder: "}{installForProvider.installDir}</small>}
+                      </div>
+                    )}
                     <div className="model-card-actions">
                       {provider.id === "voxcpm2" ? (
                         <button className="button primary" type="button" onClick={() => void connectDetectedRuntime()}>{language === "zh" ? "检测并连接 VoxCPM2" : "Detect and connect VoxCPM2"}</button>
+                      ) : canInstall ? (
+                        <button
+                          className="button primary"
+                          type="button"
+                          disabled={!consented || installForProvider?.status === "checking" || installForProvider?.status === "downloading" || installForProvider?.status === "installing" || installForProvider?.status === "testing"}
+                          onClick={() => void startProviderInstall(provider)}
+                        >
+                          {installForProvider?.status === "ready"
+                            ? (language === "zh" ? "已安装" : "Installed")
+                            : (language === "zh" ? "开始自动安装" : "Start managed install")}
+                        </button>
                       ) : (
                         <button className="button secondary" type="button" disabled>{language === "zh" ? "自动安装即将支持" : "Managed install coming soon"}</button>
                       )}
                       <a className="model-doc-link" href={provider.sourceUrl} onClick={openModelDocs} target="_blank" rel="noreferrer">{language === "zh" ? "查看官方仓库" : "Open source repo"}</a>
                     </div>
                   </article>
-                ))}
+                  );
+                })}
               </div>
               <section className="manual-model-section">
                 <div className="settings-section-heading">

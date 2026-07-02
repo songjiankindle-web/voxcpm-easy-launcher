@@ -21,6 +21,8 @@ pub fn run() {
             runtime::repair_runtime,
             runtime::uninstall_model,
             runtime::open_logs,
+            runtime::provider_install_status,
+            runtime::install_model_provider,
             project::save_project,
             project::open_project,
             project::autosave_project,

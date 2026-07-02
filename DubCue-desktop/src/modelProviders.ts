@@ -2,7 +2,7 @@ export type ModelProviderId = "voxcpm2" | "cosyvoice" | "indextts2" | "gpt-sovit
 
 export type CommercialUse = "safe" | "check" | "nonCommercial";
 export type InstallMode = "managed" | "manual" | "api";
-export type InstallStatus = "available" | "planned";
+export type InstallStatus = "available" | "experimental" | "planned";
 export type ModelGoal = "general" | "video" | "voice" | "lightweight" | "all";
 
 export type ModelCapabilities = {
@@ -162,12 +162,12 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
     name: "Spark-TTS",
     sourceUrl: "https://github.com/SparkAudio/Spark-TTS",
     goals: ["lightweight", "all"],
-    summary: { zh: "轻量双语、零样本克隆和 Apache-2.0 方向更友好，适合后续优先实装。", en: "Lightweight bilingual zero-shot cloning with a friendlier Apache-2.0 direction; a good next implementation target." },
+    summary: { zh: "轻量双语、零样本克隆和 Apache-2.0 方向更友好；0.6 起提供实验性自动安装。", en: "Lightweight bilingual zero-shot cloning with a friendlier Apache-2.0 direction; experimental managed install starts in 0.6." },
     bestFor: { zh: "轻量 / 双语 / 商用友好", en: "Lightweight / bilingual / commercial-friendly" },
-    installDifficulty: { zh: "中等", en: "Medium" },
-    hardwareHint: { zh: "0.5B 级别，资源压力相对可控", en: "0.5B-class model with more manageable resource needs" },
-    licenseNote: { zh: "Apache-2.0；仍需确认权重与依赖授权", en: "Apache-2.0; still confirm weights and dependencies" },
-    status: "planned",
+    installDifficulty: { zh: "实验性自动安装", en: "Experimental managed install" },
+    hardwareHint: { zh: "0.5B 级别；建议预留 16GB 以上空间，首次安装依赖网络与 Python 环境", en: "0.5B-class; keep 16GB+ free. First install depends on network and Python." },
+    licenseNote: { zh: "Apache-2.0；音色克隆需遵守官方免责声明与素材授权", en: "Apache-2.0; voice cloning must follow upstream disclaimers and source-audio rights" },
+    status: "experimental",
     capabilities: {
       voiceClone: true,
       durationControl: true,
@@ -177,7 +177,7 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
       streaming: false,
       dialects: false,
       commercialUse: "safe",
-      installMode: "manual",
+      installMode: "managed",
       macMpsOk: true,
       cpuOk: true,
     },
