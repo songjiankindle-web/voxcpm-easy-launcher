@@ -43,6 +43,7 @@ import {
   type BackendHealth,
   type MergedAudio,
 } from "./api";
+import { CURRENT_PROVIDER_ID, MODEL_GOALS, MODEL_PROVIDERS, type ModelGoal, type ModelProvider } from "./modelProviders";
 import {
   autosaveWorkspace,
   isDesktopApp,
@@ -493,6 +494,9 @@ function App() {
   const [backendHealth, setBackendHealth] = useState<BackendHealth | null>(null);
   const [backendError, setBackendError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [modelWizardOpen, setModelWizardOpen] = useState(false);
+  const [modelGoal, setModelGoal] = useState<ModelGoal>("general");
+  const [manualModelMode, setManualModelMode] = useState<"directory" | "api" | "adapter">("directory");
   const [runtime, setRuntime] = useState<RuntimeStatus | null>(null);
   const [nativeProjectPath, setNativeProjectPath] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
@@ -590,6 +594,52 @@ function App() {
   const projectDeleteSegmentCount = projectDeleteTarget
     ? projects.reduce((sum, project) => projectDeleteIds.has(project.id) ? sum + project.segments.length : sum, 0)
     : 0;
+  const currentProvider = MODEL_PROVIDERS.find((provider) => provider.id === CURRENT_PROVIDER_ID) || MODEL_PROVIDERS[0];
+  const recommendedProviders = MODEL_PROVIDERS.filter((provider) => modelGoal === "all" || provider.goals.includes(modelGoal));
+  const capabilityLabel = (enabled: boolean, label: string) => enabled ? label : "";
+  const providerCapabilityTags = (provider: ModelProvider) => [
+    capabilityLabel(provider.capabilities.voiceClone, language === "zh" ? "音色克隆" : "Voice clone"),
+    capabilityLabel(provider.capabilities.durationControl, language === "zh" ? "时长控制" : "Duration"),
+    capabilityLabel(provider.capabilities.emotionControl, language === "zh" ? "情绪控制" : "Emotion"),
+    capabilityLabel(provider.capabilities.streaming, language === "zh" ? "流式" : "Streaming"),
+    capabilityLabel(provider.capabilities.dialects, language === "zh" ? "方言/口音" : "Dialects"),
+  ].filter(Boolean);
+  const commercialLabel = (provider: ModelProvider) => {
+    if (provider.capabilities.commercialUse === "safe") return language === "zh" ? "商用友好" : "Commercial-friendly";
+    if (provider.capabilities.commercialUse === "nonCommercial") return language === "zh" ? "非商用" : "Non-commercial";
+    return language === "zh" ? "商用需确认" : "Check license";
+  };
+  const readableModelError = (message: string) => {
+    const value = message.toLowerCase();
+    if (value.includes("network") || value.includes("dns") || value.includes("timed out") || value.includes("connection")) {
+      return language === "zh" ? "网络连接失败。请检查网络、代理或稍后重试；也可以改用手动下载模型。" : "Network connection failed. Check your network/proxy, retry later, or install manually.";
+    }
+    if (value.includes("space") || value.includes("no space")) {
+      return language === "zh" ? "磁盘空间不足。请清理空间后重试，或把模型安装到空间更大的磁盘。" : "Not enough disk space. Free up storage or install the model on a larger disk.";
+    }
+    if (value.includes("python") || value.includes("runtime") || value.includes("venv")) {
+      return language === "zh" ? "本地 Python 运行环境不可用。请尝试重新检测，或使用 DubCue 的独立运行环境。" : "The local Python runtime is unavailable. Try detecting again or use DubCue's isolated runtime.";
+    }
+    if (value.includes("memory") || value.includes("mps") || value.includes("cuda") || value.includes("metal")) {
+      return language === "zh" ? "本机内存或加速环境不足。建议关闭其他程序，或选择更轻量的模型。" : "Memory or acceleration resources are insufficient. Close other apps or choose a lighter model.";
+    }
+    if (value.includes("license")) {
+      return language === "zh" ? "这个模型需要先确认授权。商用前请阅读模型仓库的许可证说明。" : "This model requires license confirmation. Read the upstream license before commercial use.";
+    }
+    if (value.includes("missing") || value.includes("not found") || value.includes("incomplete")) {
+      return language === "zh" ? "模型或运行文件不完整。请重新检测，或手动选择正确的模型目录。" : "Model or runtime files are incomplete. Detect again or choose the correct model folder manually.";
+    }
+    return message;
+  };
+  const installSteps = [
+    language === "zh" ? "检查环境" : "Check environment",
+    language === "zh" ? "下载模型/运行时" : "Download model/runtime",
+    language === "zh" ? "安装依赖" : "Install dependencies",
+    language === "zh" ? "启动服务" : "Start service",
+    language === "zh" ? "测试生成" : "Test generation",
+    language === "zh" ? "设为当前模型" : "Set current model",
+  ];
+  const activeInstallStep = runtime?.status === "downloading" ? 1 : runtime?.status === "verifying" ? 2 : runtime?.status === "starting" ? 3 : backendHealth ? 5 : 0;
 
   const statusCopy = useMemo(
     () => ({ pending: t.idle, generating: t.processing, done: t.ready, error: t.failed }),
@@ -1106,8 +1156,9 @@ function App() {
       setRuntime(running);
       await checkBackend();
     } catch (error) {
-      setBackendError(String(error));
-      setRuntime((current) => current ? { ...current, status: "error", message: String(error) } : current);
+      const message = readableModelError(error instanceof Error ? error.message : String(error));
+      setBackendError(message);
+      setRuntime((current) => current ? { ...current, status: "error", message } : current);
     }
   };
 
@@ -2501,6 +2552,93 @@ function App() {
           </Dialog.Portal>
         </Dialog.Root>
 
+        <Dialog.Root open={modelWizardOpen} onOpenChange={setModelWizardOpen}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="dialog-overlay" />
+            <Dialog.Content className="settings-dialog model-wizard-dialog">
+              <div className="dialog-heading">
+                <div>
+                  <Dialog.Title>{language === "zh" ? "添加本地开源模型" : "Add local open-source model"}</Dialog.Title>
+                  <Dialog.Description>{language === "zh" ? "先选择你的目标，DubCue 会推荐合适的本地 TTS 后端；自动安装会逐步开放。" : "Choose your goal first. DubCue recommends local TTS backends; managed installation will roll out gradually."}</Dialog.Description>
+                </div>
+                <Dialog.Close asChild><IconButton label={language === "zh" ? "关闭" : "Close"}><X size={17} /></IconButton></Dialog.Close>
+              </div>
+              <div className="model-goals">
+                {MODEL_GOALS.map((goal) => (
+                  <button
+                    className={modelGoal === goal.id ? "active" : ""}
+                    type="button"
+                    key={goal.id}
+                    onClick={() => setModelGoal(goal.id)}
+                  >
+                    <strong>{goal.label[language]}</strong>
+                    <small>{goal.description[language]}</small>
+                  </button>
+                ))}
+              </div>
+              <div className="recommended-models">
+                {recommendedProviders.map((provider) => (
+                  <article className={`model-recommendation ${provider.status}`} key={provider.id}>
+                    <div className="model-recommendation-heading">
+                      <span>
+                        <strong>{provider.name}</strong>
+                        <small>{provider.bestFor[language]}</small>
+                      </span>
+                      <b>{provider.status === "available" ? (language === "zh" ? "已接入" : "Available") : (language === "zh" ? "即将支持" : "Planned")}</b>
+                    </div>
+                    <p>{provider.summary[language]}</p>
+                    <div className="capability-tags">
+                      {providerCapabilityTags(provider).map((tag) => <em key={tag}>{tag}</em>)}
+                      <em>{commercialLabel(provider)}</em>
+                    </div>
+                    <dl className="model-meta">
+                      <div><dt>{language === "zh" ? "安装难度" : "Install"}</dt><dd>{provider.installDifficulty[language]}</dd></div>
+                      <div><dt>{language === "zh" ? "硬件建议" : "Hardware"}</dt><dd>{provider.hardwareHint[language]}</dd></div>
+                      <div><dt>{language === "zh" ? "授权提示" : "License"}</dt><dd>{provider.licenseNote[language]}</dd></div>
+                    </dl>
+                    <div className="model-card-actions">
+                      {provider.id === "voxcpm2" ? (
+                        <button className="button primary" type="button" onClick={() => void connectDetectedRuntime()}>{language === "zh" ? "检测并连接 VoxCPM2" : "Detect and connect VoxCPM2"}</button>
+                      ) : (
+                        <button className="button secondary" type="button" disabled>{language === "zh" ? "自动安装即将支持" : "Managed install coming soon"}</button>
+                      )}
+                      <a className="model-doc-link" href={provider.sourceUrl} onClick={openModelDocs} target="_blank" rel="noreferrer">{language === "zh" ? "查看官方仓库" : "Open source repo"}</a>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <section className="manual-model-section">
+                <div className="settings-section-heading">
+                  <strong>{language === "zh" ? "手动接入" : "Manual connection"}</strong>
+                  <small>{language === "zh" ? "如果你已经自己安装了其他模型，可以先用高级入口接入；DubCue 会在后续版本补全自动适配器。" : "If you have already installed another model, use an advanced entry first; DubCue will add managed adapters in later versions."}</small>
+                </div>
+                <div className="manual-model-tabs">
+                  {[
+                    ["directory", language === "zh" ? "选择模型目录" : "Model folder"],
+                    ["api", language === "zh" ? "连接本地服务 API" : "Local service API"],
+                    ["adapter", language === "zh" ? "导入自定义适配器" : "Custom adapter"],
+                  ].map(([id, label]) => (
+                    <button className={manualModelMode === id ? "active" : ""} type="button" key={id} onClick={() => setManualModelMode(id as "directory" | "api" | "adapter")}>{label}</button>
+                  ))}
+                </div>
+                <div className="manual-model-placeholder">
+                  <strong>{manualModelMode === "directory"
+                    ? (language === "zh" ? "从本地目录识别模型能力" : "Detect capabilities from a local folder")
+                    : manualModelMode === "api"
+                      ? (language === "zh" ? "连接 OpenAI/HTTP 风格的本地 TTS 服务" : "Connect an OpenAI/HTTP-style local TTS service")
+                      : (language === "zh" ? "加载 DubCue provider adapter" : "Load a DubCue provider adapter")}</strong>
+                  <p>{language === "zh"
+                    ? "0.6.0.0 先提供入口和能力模型；实际文件选择、API 校验和适配器沙箱将在后续实现。"
+                    : "0.6.0.0 provides the entry point and capability model first; file picking, API validation, and adapter sandboxing will follow."}</p>
+                </div>
+              </section>
+              <div className="dialog-actions">
+                <Dialog.Close asChild><button className="button primary" type="button">{language === "zh" ? "完成" : "Done"}</button></Dialog.Close>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+
         <Dialog.Root open={settingsOpen} onOpenChange={setSettingsOpen}>
           <Dialog.Portal>
             <Dialog.Overlay className="dialog-overlay" />
@@ -2515,11 +2653,11 @@ function App() {
               <section className="model-connections" aria-labelledby="model-connections-title">
                 <div className="settings-section-heading">
                   <strong id="model-connections-title">{language === "zh" ? "生成模型" : "Generation models"}</strong>
-                  <small>{language === "zh" ? "DubCue 可连接本地开源语音模型；模型配置中心将在后续版本开放。" : "DubCue supports local open-source voice models. Full model configuration is coming next."}</small>
+                  <small>{language === "zh" ? "DubCue 0.6 起按模型能力接入本地开源语音后端；当前模型决定右侧生成控件和高级设置。" : "Starting in 0.6, DubCue connects local open-source voice backends through capabilities; the current model controls generation UI and advanced settings."}</small>
                 </div>
                 <div className={`provider-card${runtime?.modelInstalled ? " detected" : ""}`}>
                   <span className="provider-icon"><AudioWaveform size={17} /></span>
-                  <span><strong>VoxCPM2</strong><small>{backendHealth
+                  <span><strong>{currentProvider.name}</strong><small>{backendHealth
                     ? (backendHealth.modelLoaded
                       ? (language === "zh" ? "模型已加载，可直接生成" : "Model loaded and ready")
                       : (language === "zh" ? "服务已连接，首次生成时加载模型" : "Connected; model loads on first generation"))
@@ -2535,19 +2673,36 @@ function App() {
                     >
                       {language === "zh" ? "查看 OpenBMB 官方说明文档" : "Open official OpenBMB docs"}
                     </a>
+                    <span className="capability-tags">
+                      {providerCapabilityTags(currentProvider).map((tag) => <em key={tag}>{tag}</em>)}
+                      <em>{commercialLabel(currentProvider)}</em>
+                    </span>
                   </span>
                   <b>{backendHealth ? (language === "zh" ? "已连接" : "Connected") : runtime?.modelInstalled ? (language === "zh" ? "已发现" : "Detected") : (language === "zh" ? "未配置" : "Not configured")}</b>
                 </div>
-                <div className="provider-card muted">
+                <button className="provider-card provider-card-button" type="button" onClick={() => setModelWizardOpen(true)}>
                   <span className="provider-icon"><Plus size={17} /></span>
-                  <span><strong>{language === "zh" ? "其他本地开源模型" : "Other local open-source model"}</strong><small>{language === "zh" ? "即将支持添加模型目录与兼容服务" : "Model folders and compatible services coming soon"}</small></span>
-                  <b>{language === "zh" ? "即将推出" : "Coming soon"}</b>
-                </div>
+                  <span><strong>{language === "zh" ? "添加其他本地开源模型" : "Add another local open-source model"}</strong><small>{language === "zh" ? "打开推荐模型向导，或手动接入本地模型目录 / 本地服务 API / 自定义适配器。" : "Open the recommended model guide, or manually connect a model folder, local API, or custom adapter."}</small></span>
+                  <b>{language === "zh" ? "打开向导" : "Open guide"}</b>
+                </button>
                 <div className="model-connection-actions">
                   <button className="button secondary" type="button" onClick={() => void connectDetectedRuntime()}>{language === "zh" ? "重新检测并连接" : "Detect and connect"}</button>
-                  <button className="button secondary" type="button" onClick={() => void openLogs()}>{language === "zh" ? "查看日志" : "Open logs"}</button>
                 </div>
                 {backendError && <small className="connection-hint" role="status">{backendError}</small>}
+                <div className="install-task">
+                  <strong>{language === "zh" ? "统一安装任务" : "Unified install task"}</strong>
+                  <div>
+                    {installSteps.map((step, index) => (
+                      <span className={index <= activeInstallStep ? "active" : ""} key={step}>{step}</span>
+                    ))}
+                  </div>
+                  <small>{language === "zh" ? "当前先接入 VoxCPM2 现有运行时；其他模型会复用这套任务和错误提示框架。" : "VoxCPM2 uses this existing runtime first; future models will reuse this task and error framework."}</small>
+                </div>
+                <details className="troubleshooting">
+                  <summary>{language === "zh" ? "故障排查" : "Troubleshooting"}<ChevronDown size={14} /></summary>
+                  <p>{language === "zh" ? "日志主要用于排查模型启动失败、端口占用、依赖缺失或生成报错。普通使用时不需要打开。" : "Logs help diagnose model startup failures, port conflicts, missing dependencies, or generation errors. You usually do not need them."}</p>
+                  <button className="button secondary" type="button" onClick={() => void openLogs()}>{language === "zh" ? "查看诊断日志" : "Open diagnostic logs"}</button>
+                </details>
               </section>
               {!isDesktopApp() && <label className="field">
                 <span>{language === "zh" ? "本地生成服务地址" : "Local generation service"}</span>
@@ -2563,22 +2718,26 @@ function App() {
                 <summary>
                   <span>
                     <strong>{language === "zh" ? "当前模型高级设置" : "Current model advanced settings"}</strong>
-                    <small>{language === "zh" ? `默认最高质量 · CFG ${cfgValue.toFixed(1)} · ${inferenceTimesteps} 步` : `Highest quality by default · CFG ${cfgValue.toFixed(1)} · ${inferenceTimesteps} steps`}</small>
+                    <small>{currentProvider.id === "voxcpm2"
+                      ? (language === "zh" ? `VoxCPM2 · 默认最高质量 · CFG ${cfgValue.toFixed(1)} · ${inferenceTimesteps} 步` : `VoxCPM2 · Highest quality by default · CFG ${cfgValue.toFixed(1)} · ${inferenceTimesteps} steps`)
+                      : (language === "zh" ? "当前模型暂无 DubCue 内置高级参数面板。" : "No built-in DubCue advanced panel for the current model yet.")}</small>
                   </span>
                   <ChevronDown size={15} aria-hidden="true" />
                 </summary>
-                <div className="quality-controls">
-                  <label className="quality-control">
-                    <span><strong>CFG</strong><small>{language === "zh" ? "控制提示词和参考音色的贴合程度，不代表音质高低" : "Controls prompt and voice adherence, not audio quality"}</small></span>
-                    <input type="range" min="1" max="3" step="0.1" value={cfgValue} aria-label="CFG" onChange={(event) => setCfgValue(Number(event.target.value))} />
-                    <output>{cfgValue.toFixed(1)}</output>
-                  </label>
-                  <label className="quality-control">
-                    <span><strong>LocDiT {language === "zh" ? "迭代步数" : "steps"}</strong><small>{language === "zh" ? "降低步数可以加快生成，但可能减少声音细节" : "Lower values generate faster but may reduce detail"}</small></span>
-                    <input type="range" min="1" max="50" step="1" value={inferenceTimesteps} aria-label={language === "zh" ? "LocDiT 迭代步数" : "LocDiT steps"} onChange={(event) => setInferenceTimesteps(Number(event.target.value))} />
-                    <output>{inferenceTimesteps}</output>
-                  </label>
-                </div>
+                {currentProvider.id === "voxcpm2" ? (
+                  <div className="quality-controls">
+                    <label className="quality-control">
+                      <span><strong>CFG</strong><small>{language === "zh" ? "控制提示词和参考音色的贴合程度，不代表音质高低" : "Controls prompt and voice adherence, not audio quality"}</small></span>
+                      <input type="range" min="1" max="3" step="0.1" value={cfgValue} aria-label="CFG" onChange={(event) => setCfgValue(Number(event.target.value))} />
+                      <output>{cfgValue.toFixed(1)}</output>
+                    </label>
+                    <label className="quality-control">
+                      <span><strong>LocDiT {language === "zh" ? "迭代步数" : "steps"}</strong><small>{language === "zh" ? "降低步数可以加快生成，但可能减少声音细节" : "Lower values generate faster but may reduce detail"}</small></span>
+                      <input type="range" min="1" max="50" step="1" value={inferenceTimesteps} aria-label={language === "zh" ? "LocDiT 迭代步数" : "LocDiT steps"} onChange={(event) => setInferenceTimesteps(Number(event.target.value))} />
+                      <output>{inferenceTimesteps}</output>
+                    </label>
+                  </div>
+                ) : <p className="provider-placeholder">{language === "zh" ? "DubCue 会根据当前模型的能力声明加载对应参数，不会把 VoxCPM2 的 CFG/LocDiT 强套给其他模型。" : "DubCue loads settings from the current model's capabilities instead of forcing VoxCPM2 CFG/LocDiT controls onto every model."}</p>}
               </details>
               <div className="dialog-actions">
                 <Dialog.Close asChild><button className="button secondary" type="button">{language === "zh" ? "取消" : "Cancel"}</button></Dialog.Close>

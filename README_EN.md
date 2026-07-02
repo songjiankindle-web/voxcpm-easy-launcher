@@ -4,7 +4,7 @@
 
 [简体中文](README.md) | English
 
-> A local AI dubbing director for screen dubbing, documentary narration, audiobooks, explainers, and other directed voice-performance workflows. Version `0.5.0.2` uses VoxCPM2 as the primary local backend; `0.6.0.0` starts the move toward multi-model local TTS support.
+> A local AI dubbing director for screen dubbing, documentary narration, audiobooks, explainers, and other directed voice-performance workflows. Version `0.6.0.0` keeps VoxCPM2 as the primary generation backend while introducing the recommendation guide, capability declarations, and manual connection entry points for multi-model local TTS support.
 
 **DubCue does not train, modify, or own the VoxCPM model.** It is currently a local installer, launcher, and dubbing-direction workflow built around the excellent open-source [OpenBMB/VoxCPM](https://github.com/OpenBMB/VoxCPM) project. DubCue focuses on turning text and screen context into a controllable voice-performance project; the upcoming multi-model architecture will let additional local open-source TTS backends integrate through declared capabilities.
 

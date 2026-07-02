@@ -1,6 +1,6 @@
 [package]
 name = "dubcue-desktop"
-version = "0.5.0"
+version = "0.6.0"
 description = "Offline long-form narration director powered by VoxCPM"
 authors = ["DubCue contributors"]
 edition = "2021"

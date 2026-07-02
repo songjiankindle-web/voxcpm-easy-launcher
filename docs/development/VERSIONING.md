@@ -7,8 +7,8 @@ DubCue uses two related version numbers:
 
 ## Current baseline
 
-- App version: `0.5.0`
-- Sync version: `0.5.0.2`
+- App version: `0.6.0`
+- Sync version: `0.6.0.0`
 
 The sync version is stored in the repository root [`VERSION`](../../VERSION) file.
 
@@ -89,5 +89,5 @@ When preparing a checkpoint for Fuki:
 Example Fuki request:
 
 ```text
-把 DubCue 0.5.0.2 的 shared-core 生成和项目状态修复同步到 Fuki，但不要同步 DubCue UI。
+把 DubCue 0.6.0.0 的 shared-core 多模型 provider/capability 架构同步到 Fuki，但不要同步 DubCue UI。
 ```

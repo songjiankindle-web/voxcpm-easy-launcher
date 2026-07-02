@@ -87,7 +87,7 @@ Do not do a large refactor just for neatness during small fixes. Instead, keep n
 When asked to sync a DubCue change into Fuki:
 
 1. Identify the DubCue sync version or change range.
-   - Prefer an explicit sync version such as `0.5.0.2`.
+   - Prefer an explicit sync version such as `0.6.0.0`.
    - Prefer committed changes.
    - If changes are uncommitted, summarize the relevant files and create a focused patch plan before applying anything.
 2. Classify every change as:
