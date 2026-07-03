@@ -65,6 +65,7 @@ type SegmentStatus = "pending" | "generating" | "done" | "error";
 type ColumnId = "text" | "speed" | "prompt" | "pause" | "audio";
 const NATURAL_SPEED_CPM = 215;
 const MAX_REFERENCE_AUDIO_BYTES = 25 * 1024 * 1024;
+const APP_VERSION = "0.6.0.0";
 
 type Segment = {
   id: number;
@@ -638,10 +639,8 @@ function App() {
   ];
   const activeInstallStep = runtime?.status === "downloading" ? 1 : runtime?.status === "verifying" ? 2 : runtime?.status === "starting" ? 3 : backendHealth ? 5 : 0;
   const providerStatusLabel = (provider: ModelProvider) => {
-    if (provider.id === CURRENT_PROVIDER_ID) return language === "zh" ? "已接入" : "Available";
-    if (provider.status === "experimental") return language === "zh" ? "建议手动安装" : "Manual install recommended";
-    if (provider.status === "available") return language === "zh" ? "可用" : "Available";
-    return language === "zh" ? "手动接入" : "Manual connection";
+    if (provider.id === CURRENT_PROVIDER_ID) return language === "zh" ? "已接入" : "Connected";
+    return language === "zh" ? "未接入" : "Not connected";
   };
   const providerGuideCopy = (provider: ModelProvider) => {
     if (provider.id === "voxcpm2") {
@@ -651,7 +650,7 @@ function App() {
     }
     if (provider.id === "spark-tts") {
       return language === "zh"
-        ? "推荐先尝试：仓库轻、双语、Apache-2.0。打开官方仓库，按 README 安装并跑通示例后，再回 DubCue 手动接入。"
+        ? "推荐先尝试：仓库轻、双语、Apache-2.0。打开官方仓库，按 README 安装并跑通示例后，再回 DubCue 完成接入。"
         : "Recommended first: lightweight, bilingual, Apache-2.0. Open the official repo, follow its README, run a sample, then connect it manually in DubCue.";
     }
     if (provider.id === "cosyvoice") {
@@ -2590,7 +2589,7 @@ function App() {
               <div className="dialog-heading">
                 <div>
                   <Dialog.Title>{language === "zh" ? "添加本地开源模型" : "Add local open-source model"}</Dialog.Title>
-                  <Dialog.Description>{language === "zh" ? "DubCue 先给你清楚的模型推荐和安装路径：按官方仓库安装，跑通后再回到 DubCue 手动接入。" : "DubCue gives clear model recommendations and setup paths first: install from the official repo, run a sample, then connect it manually."}</Dialog.Description>
+                  <Dialog.Description>{language === "zh" ? "DubCue 先给你清楚的模型推荐和安装路径：按官方仓库安装，跑通后再回到 DubCue 完成接入。" : "DubCue gives clear model recommendations and setup paths first: install from the official repo, run a sample, then connect it in DubCue."}</Dialog.Description>
                 </div>
                 <Dialog.Close asChild><IconButton label={language === "zh" ? "关闭" : "Close"}><X size={17} /></IconButton></Dialog.Close>
               </div>
@@ -2635,12 +2634,12 @@ function App() {
               <section className="manual-model-section simple">
                 <div className="settings-section-heading">
                   <strong>{language === "zh" ? "安装好之后怎么接入？" : "How to connect after installing?"}</strong>
-                  <small>{language === "zh" ? "先让模型在本机跑通。下一步 DubCue 会开放三种接入口：模型目录、本地服务 API、自定义适配器。" : "First make sure the model runs locally. DubCue will then expose three connection paths: model folder, local API, and custom adapter."}</small>
+                  <small>{language === "zh" ? "先让模型在本机跑通。接入时 DubCue 会检测仓库/权重文件、本地 API 健康状态和一次测试生成；通过后才会把模型标记为“已接入”。" : "First make sure the model runs locally. During connection, DubCue will check repo/weight files, local API health, and one test generation before marking it as connected."}</small>
                 </div>
-                <div className="manual-entry-actions" aria-label={language === "zh" ? "后续接入方式" : "Upcoming connection paths"}>
+                <div className="manual-entry-actions" aria-label={language === "zh" ? "接入检测方式" : "Connection checks"}>
                   <span>{language === "zh" ? "模型目录" : "Model folder"}</span>
                   <span>{language === "zh" ? "本地服务 API" : "Local API"}</span>
-                  <span>{language === "zh" ? "自定义适配器" : "Custom adapter"}</span>
+                  <span>{language === "zh" ? "测试生成" : "Test generation"}</span>
                 </div>
               </section>
               <div className="dialog-actions">
@@ -2693,7 +2692,7 @@ function App() {
                 </div>
                 <button className="provider-card provider-card-button" type="button" onClick={() => setModelWizardOpen(true)}>
                   <span className="provider-icon"><Plus size={17} /></span>
-                  <span><strong>{language === "zh" ? "添加其他本地开源模型" : "Add another local open-source model"}</strong><small>{language === "zh" ? "打开推荐模型向导，或手动接入本地模型目录 / 本地服务 API / 自定义适配器。" : "Open the recommended model guide, or manually connect a model folder, local API, or custom adapter."}</small></span>
+                  <span><strong>{language === "zh" ? "添加其他本地开源模型" : "Add another local open-source model"}</strong><small>{language === "zh" ? "打开推荐模型向导，了解模型安装和接入检测方式。" : "Open the recommended model guide and learn setup and connection checks."}</small></span>
                   <b>{language === "zh" ? "打开向导" : "Open guide"}</b>
                 </button>
                 <div className="model-connection-actions">
@@ -2750,9 +2749,12 @@ function App() {
                   </div>
                 ) : <p className="provider-placeholder">{language === "zh" ? "DubCue 会根据当前模型的能力声明加载对应参数，不会把 VoxCPM2 的 CFG/LocDiT 强套给其他模型。" : "DubCue loads settings from the current model's capabilities instead of forcing VoxCPM2 CFG/LocDiT controls onto every model."}</p>}
               </details>
-              <div className="dialog-actions">
-                <Dialog.Close asChild><button className="button secondary" type="button">{language === "zh" ? "取消" : "Cancel"}</button></Dialog.Close>
-                <button className="button primary" type="button" onClick={saveSettings}>{language === "zh" ? "保存设置" : "Save settings"}</button>
+              <div className="settings-footer">
+                <span className="app-version">DubCue {APP_VERSION}</span>
+                <div className="dialog-actions">
+                  <Dialog.Close asChild><button className="button secondary" type="button">{language === "zh" ? "取消" : "Cancel"}</button></Dialog.Close>
+                  <button className="button primary" type="button" onClick={saveSettings}>{language === "zh" ? "保存设置" : "Save settings"}</button>
+                </div>
               </div>
             </Dialog.Content>
           </Dialog.Portal>

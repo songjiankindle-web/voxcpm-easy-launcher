@@ -1057,15 +1057,13 @@ select:focus-visible {
 .recommended-models.simple { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-top: 10px; }
 .model-recommendation { display: grid; gap: 9px; padding: 12px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-raised); }
 .model-recommendation.simple { align-content: start; gap: 8px; min-height: 178px; padding: 10px; }
-.model-recommendation.available,
-.model-recommendation.experimental { border-color: color-mix(in srgb, var(--success) 36%, var(--border)); }
+.model-recommendation.available { border-color: color-mix(in srgb, var(--success) 36%, var(--border)); }
 .model-recommendation-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .model-recommendation-heading span { display: grid; gap: 3px; }
 .model-recommendation-heading strong { font-size: 12px; }
 .model-recommendation-heading small { color: var(--text-muted); font-size: 9px; }
 .model-recommendation-heading b { padding: 3px 6px; border-radius: 999px; color: var(--text-muted); background: var(--surface-muted); font-size: 8px; white-space: nowrap; }
-.model-recommendation.available .model-recommendation-heading b,
-.model-recommendation.experimental .model-recommendation-heading b { color: var(--success); background: color-mix(in srgb, var(--success) 11%, transparent); }
+.model-recommendation.available .model-recommendation-heading b { color: var(--success); background: color-mix(in srgb, var(--success) 11%, transparent); }
 .model-recommendation p { margin: 0; color: var(--text-muted); font-size: 10px; line-height: 1.55; }
 .model-recommendation.simple p { min-height: 48px; font-size: 9px; line-height: 1.5; }
 .official-repo-strip { display: flex; align-items: center; gap: 7px; width: fit-content; padding: 5px 7px; border-radius: 8px; background: var(--surface-muted); }
@@ -1110,10 +1108,14 @@ select:focus-visible {
 .manual-model-placeholder p { margin: 5px 0 0; color: var(--text-muted); font-size: 10px; line-height: 1.6; }
 .manual-entry-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .manual-entry-actions span { padding: 6px 8px; border: 1px dashed var(--border-strong); border-radius: 999px; color: var(--text-muted); background: var(--surface); font-size: 9px; white-space: nowrap; }
+.settings-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; }
+.settings-footer .dialog-actions { margin-top: 0; }
+.app-version { color: var(--text-subtle); font-size: 10px; font-variant-numeric: tabular-nums; }
 @media (max-width: 720px) {
   .model-goals,
   .recommended-models,
   .recommended-models.simple,
   .manual-model-section.simple { grid-template-columns: 1fr; }
   .manual-entry-actions { justify-content: flex-start; }
+  .settings-footer { align-items: stretch; flex-direction: column; }
 }
