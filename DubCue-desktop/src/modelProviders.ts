@@ -171,7 +171,7 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
     name: "Spark-TTS",
     sourceUrl: "https://github.com/SparkAudio/Spark-TTS",
     repoSlug: "SparkAudio/Spark-TTS",
-    goals: ["lightweight", "all"],
+    goals: ["general", "lightweight", "all"],
     summary: { zh: "轻量双语、零样本克隆和 Apache-2.0 方向更友好；0.6 起提供实验性自动安装。", en: "Lightweight bilingual zero-shot cloning with a friendlier Apache-2.0 direction; experimental managed install starts in 0.6." },
     bestFor: { zh: "轻量 / 双语 / 商用友好", en: "Lightweight / bilingual / commercial-friendly" },
     installDifficulty: { zh: "实验性自动安装", en: "Experimental managed install" },

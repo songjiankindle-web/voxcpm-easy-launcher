@@ -602,6 +602,7 @@ function App() {
     : 0;
   const currentProvider = MODEL_PROVIDERS.find((provider) => provider.id === CURRENT_PROVIDER_ID) || MODEL_PROVIDERS[0];
   const recommendedProviders = MODEL_PROVIDERS.filter((provider) => modelGoal === "all" || provider.goals.includes(modelGoal));
+  const installableProviders = recommendedProviders.filter((provider) => provider.status === "experimental" && provider.capabilities.installMode === "managed");
   const capabilityLabel = (enabled: boolean, label: string) => enabled ? label : "";
   const providerCapabilityTags = (provider: ModelProvider) => [
     capabilityLabel(provider.capabilities.voiceClone, language === "zh" ? "音色克隆" : "Voice clone"),
@@ -2644,6 +2645,16 @@ function App() {
                   </button>
                 ))}
               </div>
+              <div className="installable-hint">
+                <Sparkles size={15} />
+                <span>{installableProviders.length > 0
+                  ? (language === "zh"
+                    ? `当前可直接安装：${installableProviders.map((provider) => provider.name).join("、")}。其他模型可先查看官方仓库或用手动接入。`
+                    : `Ready to install now: ${installableProviders.map((provider) => provider.name).join(", ")}. Other models can use the repo link or manual connection first.`)
+                  : (language === "zh"
+                    ? "当前筛选没有可直接安装的模型；请切换到“轻量双语”或“查看全部模型”，也可以先手动接入。"
+                    : "No managed install is ready in this filter. Switch to Lightweight or View all, or connect manually.")}</span>
+              </div>
               <div className="recommended-models">
                 {recommendedProviders.map((provider) => {
                   const installForProvider = providerInstall?.providerId === provider.id ? providerInstall : null;
@@ -2729,7 +2740,13 @@ function App() {
                           {providerInstallButtonLabel(provider, installForProvider)}
                         </button>
                       ) : (
-                        <button className="button secondary" type="button" disabled>{language === "zh" ? "自动安装即将支持" : "Managed install coming soon"}</button>
+                        <button
+                          className="button secondary"
+                          type="button"
+                          onClick={() => setManualModelMode("directory")}
+                        >
+                          {language === "zh" ? "查看手动安装说明" : "Manual install guide"}
+                        </button>
                       )}
                       <a className="model-doc-link" href={provider.sourceUrl} onClick={openModelDocs} target="_blank" rel="noreferrer">{language === "zh" ? "查看官方仓库" : "Open source repo"}</a>
                     </div>
