@@ -123,8 +123,11 @@ fn provider_error_human(message: &str) -> (String, String) {
     if value.contains("no space") || value.contains("space") || value.contains("disk") {
         return ("diskSpace".into(), "磁盘空间不足。请清理空间，建议为 Spark-TTS 预留 16GB 以上可用空间。".into());
     }
+    if value.contains("gh") && (value.contains("not found") || value.contains("no such file")) {
+        return ("githubCliMissing".into(), "没有找到 GitHub CLI。请先安装 GitHub CLI，或在手动接入中选择你已经 clone 好的官方仓库目录。".into());
+    }
     if value.contains("git") && (value.contains("not found") || value.contains("no such file")) {
-        return ("gitMissing".into(), "没有找到 Git。请先安装 Git，或之后改用手动模型目录接入。".into());
+        return ("gitMissing".into(), "没有找到 Git。GitHub CLI clone 仓库时仍需要 Git，请先安装 Git 后重试。".into());
     }
     if value.contains("python") || value.contains("venv") || value.contains("pip") {
         return ("pythonFailed".into(), "Python 环境创建或依赖安装失败。建议安装 Python 3.12 后重试，或查看故障排查日志。".into());
@@ -313,8 +316,8 @@ async fn install_spark_tts(app: AppHandle, state: State<'_, Arc<DesktopState>>, 
         PROVIDER_ID,
         "checking",
         "environment",
-        "Checking disk, Git, and Python.",
-        "正在检查磁盘空间、Git 和 Python 环境。",
+        "Checking disk, GitHub CLI, Git, and Python.",
+        "正在检查磁盘空间、GitHub CLI、Git 和 Python 环境。",
         0.05,
         Some(&root),
     ));
@@ -338,6 +341,15 @@ async fn install_spark_tts(app: AppHandle, state: State<'_, Arc<DesktopState>>, 
         publish_provider_install(&app, &state, snapshot.clone());
         return Err(human_message);
     }
+    let mut gh_check = Command::new("gh");
+    gh_check.arg("--version");
+    if let Err(error) = run_logged(gh_check, "check GitHub CLI", &log_path) {
+        let (code, human_message) = provider_error_human(&error);
+        let mut snapshot = provider_snapshot(PROVIDER_ID, "error", "environment", &error, &human_message, 0.05, Some(&root));
+        snapshot.error_code = Some(code);
+        publish_provider_install(&app, &state, snapshot.clone());
+        return Err(human_message);
+    }
     let mut python_check = Command::new("python3");
     python_check.arg("--version");
     if let Err(error) = run_logged(python_check, "check python3", &log_path) {
@@ -352,15 +364,15 @@ async fn install_spark_tts(app: AppHandle, state: State<'_, Arc<DesktopState>>, 
         PROVIDER_ID,
         "downloading",
         "source",
-        "Downloading Spark-TTS source repository.",
-        "正在下载 Spark-TTS 官方仓库。",
+        "Cloning official Spark-TTS GitHub repository with GitHub CLI.",
+        "正在通过 GitHub CLI 克隆 Spark-TTS 官方仓库。",
         0.18,
         Some(&root),
     ));
     if !repo_dir.join(".git").exists() {
-        let mut command = Command::new("git");
-        command.arg("clone").arg("--depth").arg("1").arg("https://github.com/SparkAudio/Spark-TTS.git").arg(&repo_dir);
-        if let Err(error) = run_logged(command, "clone Spark-TTS", &log_path) {
+        let mut command = Command::new("gh");
+        command.arg("repo").arg("clone").arg("SparkAudio/Spark-TTS").arg(&repo_dir).arg("--").arg("--depth").arg("1");
+        if let Err(error) = run_logged(command, "gh repo clone Spark-TTS", &log_path) {
             let (code, human_message) = provider_error_human(&error);
             let mut snapshot = provider_snapshot(PROVIDER_ID, "error", "source", &error, &human_message, 0.18, Some(&root));
             snapshot.error_code = Some(code);

@@ -23,6 +23,7 @@ export type ModelProvider = {
   id: ModelProviderId;
   name: string;
   sourceUrl: string;
+  repoSlug: string;
   goals: ModelGoal[];
   summary: {
     zh: string;
@@ -46,6 +47,10 @@ export type ModelProvider = {
   };
   status: InstallStatus;
   capabilities: ModelCapabilities;
+  installPlan?: {
+    zh: string[];
+    en: string[];
+  };
 };
 
 export const MODEL_GOALS: Array<{ id: ModelGoal; label: { zh: string; en: string }; description: { zh: string; en: string } }> = [
@@ -61,6 +66,7 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
     id: "voxcpm2",
     name: "VoxCPM2",
     sourceUrl: "https://github.com/OpenBMB/VoxCPM",
+    repoSlug: "OpenBMB/VoxCPM",
     goals: ["general", "all"],
     summary: { zh: "当前 DubCue 主力后端，适合中文旁白与参考声音工作流。", en: "Current primary DubCue backend for Chinese narration and reference-voice workflows." },
     bestFor: { zh: "当前稳定工作流", en: "Current stable workflow" },
@@ -86,6 +92,7 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
     id: "cosyvoice",
     name: "CosyVoice / CosyVoice2",
     sourceUrl: "https://github.com/FunAudioLLM/CosyVoice",
+    repoSlug: "FunAudioLLM/CosyVoice",
     goals: ["general", "all"],
     summary: { zh: "多语种、中文方言、零样本克隆和流式能力完整，适合作为第二主力后端。", en: "Strong multilingual, Chinese dialect, zero-shot cloning, and streaming support; a good second primary backend." },
     bestFor: { zh: "多语种与中文方言", en: "Multilingual and Chinese dialects" },
@@ -111,6 +118,7 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
     id: "indextts2",
     name: "IndexTTS2",
     sourceUrl: "https://github.com/index-tts/index-tts",
+    repoSlug: "index-tts/index-tts",
     goals: ["video", "all"],
     summary: { zh: "时长控制和情绪控制突出，适合视频配音与音画同步。", en: "Duration and emotion controls make it promising for video dubbing and sync." },
     bestFor: { zh: "视频配音 / 时长控制", en: "Video dubbing / duration control" },
@@ -136,6 +144,7 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
     id: "gpt-sovits",
     name: "GPT-SoVITS",
     sourceUrl: "https://github.com/RVC-Boss/GPT-SoVITS",
+    repoSlug: "RVC-Boss/GPT-SoVITS",
     goals: ["voice", "all"],
     summary: { zh: "生态成熟，适合高级用户做自定义声音包、zero-shot 和 few-shot 微调。", en: "Mature ecosystem for custom voice packs, zero-shot, and few-shot fine-tuning." },
     bestFor: { zh: "高级音色克隆 / 声音包", en: "Advanced cloning / voice packs" },
@@ -161,6 +170,7 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
     id: "spark-tts",
     name: "Spark-TTS",
     sourceUrl: "https://github.com/SparkAudio/Spark-TTS",
+    repoSlug: "SparkAudio/Spark-TTS",
     goals: ["lightweight", "all"],
     summary: { zh: "轻量双语、零样本克隆和 Apache-2.0 方向更友好；0.6 起提供实验性自动安装。", en: "Lightweight bilingual zero-shot cloning with a friendlier Apache-2.0 direction; experimental managed install starts in 0.6." },
     bestFor: { zh: "轻量 / 双语 / 商用友好", en: "Lightweight / bilingual / commercial-friendly" },
@@ -180,6 +190,26 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
       installMode: "managed",
       macMpsOk: true,
       cpuOk: true,
+    },
+    installPlan: {
+      zh: [
+        "gh repo clone SparkAudio/Spark-TTS <DubCue模型目录>/Spark-TTS",
+        "python3 -m venv <DubCue模型目录>/.venv",
+        "<DubCue模型目录>/.venv/bin/python -m pip install -U pip setuptools wheel",
+        "<DubCue模型目录>/.venv/bin/python -m pip install -r <DubCue模型目录>/Spark-TTS/requirements.txt",
+        "<DubCue模型目录>/.venv/bin/python -m pip install -U huggingface_hub",
+        "下载 SparkAudio/Spark-TTS-0.5B 模型权重到 DubCue provider 目录",
+        "检查模型文件并登记为 DubCue 可识别的 provider",
+      ],
+      en: [
+        "gh repo clone SparkAudio/Spark-TTS <DubCue model folder>/Spark-TTS",
+        "python3 -m venv <DubCue model folder>/.venv",
+        "<DubCue model folder>/.venv/bin/python -m pip install -U pip setuptools wheel",
+        "<DubCue model folder>/.venv/bin/python -m pip install -r <DubCue model folder>/Spark-TTS/requirements.txt",
+        "<DubCue model folder>/.venv/bin/python -m pip install -U huggingface_hub",
+        "Download SparkAudio/Spark-TTS-0.5B weights into the DubCue provider folder",
+        "Verify model files and register the provider for DubCue",
+      ],
     },
   },
 ];

@@ -652,6 +652,11 @@ function App() {
     if (provider.status === "available") return language === "zh" ? "可用" : "Available";
     return language === "zh" ? "即将支持" : "Planned";
   };
+  const providerInstallButtonLabel = (provider: ModelProvider, status?: ProviderInstallStatus | null) => {
+    if (status?.status === "ready") return language === "zh" ? "已安装" : "Installed";
+    if (provider.status === "experimental") return language === "zh" ? "授权并运行安装计划" : "Approve and run install plan";
+    return language === "zh" ? "开始安装" : "Start install";
+  };
   const providerInstallSteps = [
     language === "zh" ? "环境检查" : "Environment",
     language === "zh" ? "下载仓库" : "Source",
@@ -2655,6 +2660,10 @@ function App() {
                       <b>{providerStatusLabel(provider)}</b>
                     </div>
                     <p>{provider.summary[language]}</p>
+                    <div className="official-repo-strip">
+                      <span>{language === "zh" ? "官方仓库" : "Official repo"}</span>
+                      <code>{provider.repoSlug}</code>
+                    </div>
                     <div className="capability-tags">
                       {providerCapabilityTags(provider).map((tag) => <em key={tag}>{tag}</em>)}
                       <em>{commercialLabel(provider)}</em>
@@ -2675,6 +2684,22 @@ function App() {
                           ? "我已了解 Spark-TTS 的官方授权与音色克隆使用风险；只会使用有权使用的参考声音。"
                           : "I understand Spark-TTS licensing and voice-cloning risks, and will only use reference voices I have rights to use."}</span>
                       </label>
+                    )}
+                    {provider.installPlan && (
+                      <details className="install-plan" open={provider.id === "spark-tts"}>
+                        <summary>
+                          <span>{language === "zh" ? "查看将要执行的安装计划" : "Review install plan"}</span>
+                          <ChevronDown size={13} />
+                        </summary>
+                        <ol>
+                          {provider.installPlan[language].map((step) => (
+                            <li key={step}><code>{step}</code></li>
+                          ))}
+                        </ol>
+                        <p>{language === "zh"
+                          ? "DubCue 会逐步执行这些命令，并把完整输出写入故障排查日志；出错时会停在失败步骤，不继续往下跑。"
+                          : "DubCue runs these steps one by one and writes full output to diagnostics. If a step fails, it stops there."}</p>
+                      </details>
                     )}
                     {installForProvider && installForProvider.status !== "idle" && (
                       <div className={`provider-install-status ${installForProvider.status}`}>
@@ -2701,9 +2726,7 @@ function App() {
                           disabled={!consented || installForProvider?.status === "checking" || installForProvider?.status === "downloading" || installForProvider?.status === "installing" || installForProvider?.status === "testing"}
                           onClick={() => void startProviderInstall(provider)}
                         >
-                          {installForProvider?.status === "ready"
-                            ? (language === "zh" ? "已安装" : "Installed")
-                            : (language === "zh" ? "开始自动安装" : "Start managed install")}
+                          {providerInstallButtonLabel(provider, installForProvider)}
                         </button>
                       ) : (
                         <button className="button secondary" type="button" disabled>{language === "zh" ? "自动安装即将支持" : "Managed install coming soon"}</button>
