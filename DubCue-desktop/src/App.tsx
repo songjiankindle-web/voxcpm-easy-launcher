@@ -43,23 +43,19 @@ import {
   type BackendHealth,
   type MergedAudio,
 } from "./api";
-import { CURRENT_PROVIDER_ID, MODEL_GOALS, MODEL_PROVIDERS, type ModelGoal, type ModelProvider } from "./modelProviders";
+import { CURRENT_PROVIDER_ID, MODEL_PROVIDERS, type ModelProvider } from "./modelProviders";
 import {
   autosaveWorkspace,
   isDesktopApp,
-  installModelProvider,
   loadAutosave,
   openExternalUrl,
   openLogs,
-  providerInstallStatus,
   runtimeStatus,
   saveAudioFile,
   saveProjectFile,
   startBackend,
-  watchProviderInstall,
   watchRuntime,
   type NativeWorkspace,
-  type ProviderInstallStatus,
   type RuntimeStatus,
 } from "./desktop";
 import "./App.css";
@@ -499,10 +495,6 @@ function App() {
   const [backendError, setBackendError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [modelWizardOpen, setModelWizardOpen] = useState(false);
-  const [modelGoal, setModelGoal] = useState<ModelGoal>("general");
-  const [manualModelMode, setManualModelMode] = useState<"directory" | "api" | "adapter">("directory");
-  const [providerInstall, setProviderInstall] = useState<ProviderInstallStatus | null>(null);
-  const [providerInstallConsent, setProviderInstallConsent] = useState<Record<string, boolean>>({});
   const [runtime, setRuntime] = useState<RuntimeStatus | null>(null);
   const [nativeProjectPath, setNativeProjectPath] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
@@ -601,8 +593,6 @@ function App() {
     ? projects.reduce((sum, project) => projectDeleteIds.has(project.id) ? sum + project.segments.length : sum, 0)
     : 0;
   const currentProvider = MODEL_PROVIDERS.find((provider) => provider.id === CURRENT_PROVIDER_ID) || MODEL_PROVIDERS[0];
-  const recommendedProviders = MODEL_PROVIDERS.filter((provider) => modelGoal === "all" || provider.goals.includes(modelGoal));
-  const installableProviders = recommendedProviders.filter((provider) => provider.status === "experimental" && provider.capabilities.installMode === "managed");
   const capabilityLabel = (enabled: boolean, label: string) => enabled ? label : "";
   const providerCapabilityTags = (provider: ModelProvider) => [
     capabilityLabel(provider.capabilities.voiceClone, language === "zh" ? "音色克隆" : "Voice clone"),
@@ -649,31 +639,37 @@ function App() {
   const activeInstallStep = runtime?.status === "downloading" ? 1 : runtime?.status === "verifying" ? 2 : runtime?.status === "starting" ? 3 : backendHealth ? 5 : 0;
   const providerStatusLabel = (provider: ModelProvider) => {
     if (provider.id === CURRENT_PROVIDER_ID) return language === "zh" ? "已接入" : "Available";
-    if (provider.status === "experimental") return language === "zh" ? "实验性自动安装" : "Experimental install";
+    if (provider.status === "experimental") return language === "zh" ? "建议手动安装" : "Manual install recommended";
     if (provider.status === "available") return language === "zh" ? "可用" : "Available";
-    return language === "zh" ? "即将支持" : "Planned";
+    return language === "zh" ? "手动接入" : "Manual connection";
   };
-  const providerInstallButtonLabel = (provider: ModelProvider, status?: ProviderInstallStatus | null) => {
-    if (status?.status === "ready") return language === "zh" ? "已安装" : "Installed";
-    if (provider.status === "experimental") return language === "zh" ? "授权并运行安装计划" : "Approve and run install plan";
-    return language === "zh" ? "开始安装" : "Start install";
-  };
-  const providerInstallSteps = [
-    language === "zh" ? "环境检查" : "Environment",
-    language === "zh" ? "下载仓库" : "Source",
-    language === "zh" ? "安装依赖" : "Dependencies",
-    language === "zh" ? "下载权重" : "Weights",
-    language === "zh" ? "检查文件" : "Smoke test",
-    language === "zh" ? "完成登记" : "Ready",
-  ];
-  const providerInstallStepIndex = (status?: ProviderInstallStatus | null) => {
-    if (!status) return 0;
-    if (status.stage === "source") return 1;
-    if (status.stage === "python" || status.stage === "dependencies") return 2;
-    if (status.stage === "model") return 3;
-    if (status.stage === "smokeTest") return 4;
-    if (status.status === "ready") return 5;
-    return 0;
+  const providerGuideCopy = (provider: ModelProvider) => {
+    if (provider.id === "voxcpm2") {
+      return language === "zh"
+        ? "DubCue 当前默认后端。若本机已经有 VoxCPM2，直接检测并连接即可。"
+        : "DubCue's default backend. If VoxCPM2 is already on this machine, detect and connect it directly.";
+    }
+    if (provider.id === "spark-tts") {
+      return language === "zh"
+        ? "推荐先尝试：仓库轻、双语、Apache-2.0。打开官方仓库，按 README 安装并跑通示例后，再回 DubCue 手动接入。"
+        : "Recommended first: lightweight, bilingual, Apache-2.0. Open the official repo, follow its README, run a sample, then connect it manually in DubCue.";
+    }
+    if (provider.id === "cosyvoice") {
+      return language === "zh"
+        ? "适合多语种、中文方言和更完整的第三方能力。按官方 README 部署服务后，再用本地 API 接入。"
+        : "Good for multilingual and Chinese dialect workflows. Deploy it from the official README, then connect the local API.";
+    }
+    if (provider.id === "indextts2") {
+      return language === "zh"
+        ? "适合视频配音里更重视时长和情绪控制的场景；商用前要先确认授权。"
+        : "Useful when duration and emotion control matter for video dubbing; confirm licensing before commercial use.";
+    }
+    if (provider.id === "gpt-sovits") {
+      return language === "zh"
+        ? "适合高级音色克隆和自定义声音包；部署链路更像专业工具，建议熟悉本地 Python 环境后使用。"
+        : "Good for advanced cloning and custom voice packs; it is more of a pro local-Python workflow.";
+    }
+    return provider.summary[language];
   };
 
   const statusCopy = useMemo(
@@ -717,15 +713,6 @@ function App() {
       }
       window.localStorage.setItem("dubcue.native-migration.v1", "complete");
     })().catch((error) => setBackendError(String(error)));
-    return () => { disposed = true; unlisten?.(); };
-  }, []);
-
-  useEffect(() => {
-    if (!isDesktopApp()) return;
-    let disposed = false;
-    let unlisten: (() => void) | undefined;
-    void watchProviderInstall((value) => { if (!disposed) setProviderInstall(value); }).then((dispose) => { unlisten = dispose; });
-    void providerInstallStatus().then((value) => { if (!disposed) setProviderInstall(value); }).catch(() => {});
     return () => { disposed = true; unlisten?.(); };
   }, []);
 
@@ -1203,31 +1190,6 @@ function App() {
       const message = readableModelError(error instanceof Error ? error.message : String(error));
       setBackendError(message);
       setRuntime((current) => current ? { ...current, status: "error", message } : current);
-    }
-  };
-
-  const startProviderInstall = async (provider: ModelProvider) => {
-    if (!isDesktopApp()) {
-      setBackendError(language === "zh" ? "自动安装只在桌面 App 中可用；网页开发模式下请先使用手动接入。" : "Managed install is only available in the desktop app. Use manual connection in the web preview.");
-      return;
-    }
-    setBackendError("");
-    try {
-      const status = await installModelProvider(provider.id, Boolean(providerInstallConsent[provider.id]));
-      setProviderInstall(status);
-    } catch (error) {
-      const message = readableModelError(error instanceof Error ? error.message : String(error));
-      setBackendError(message);
-      setProviderInstall((current) => ({
-        providerId: provider.id,
-        status: "error",
-        stage: current?.stage || "install",
-        message,
-        humanMessage: message,
-        progress: current?.progress || 0,
-        installDir: current?.installDir,
-        errorCode: current?.errorCode || "frontend",
-      }));
     }
   };
 
@@ -2624,45 +2586,23 @@ function App() {
         <Dialog.Root open={modelWizardOpen} onOpenChange={setModelWizardOpen}>
           <Dialog.Portal>
             <Dialog.Overlay className="dialog-overlay" />
-            <Dialog.Content className="settings-dialog model-wizard-dialog">
+            <Dialog.Content className="settings-dialog model-wizard-dialog compact">
               <div className="dialog-heading">
                 <div>
                   <Dialog.Title>{language === "zh" ? "添加本地开源模型" : "Add local open-source model"}</Dialog.Title>
-                  <Dialog.Description>{language === "zh" ? "先选择你的目标，DubCue 会推荐合适的本地 TTS 后端；自动安装会逐步开放。" : "Choose your goal first. DubCue recommends local TTS backends; managed installation will roll out gradually."}</Dialog.Description>
+                  <Dialog.Description>{language === "zh" ? "DubCue 先给你清楚的模型推荐和安装路径：按官方仓库安装，跑通后再回到 DubCue 手动接入。" : "DubCue gives clear model recommendations and setup paths first: install from the official repo, run a sample, then connect it manually."}</Dialog.Description>
                 </div>
                 <Dialog.Close asChild><IconButton label={language === "zh" ? "关闭" : "Close"}><X size={17} /></IconButton></Dialog.Close>
               </div>
-              <div className="model-goals">
-                {MODEL_GOALS.map((goal) => (
-                  <button
-                    className={modelGoal === goal.id ? "active" : ""}
-                    type="button"
-                    key={goal.id}
-                    onClick={() => setModelGoal(goal.id)}
-                  >
-                    <strong>{goal.label[language]}</strong>
-                    <small>{goal.description[language]}</small>
-                  </button>
-                ))}
+              <div className="model-wizard-note">
+                <BookOpen size={15} />
+                <span>{language === "zh"
+                  ? "现在不再展示半成品自动安装按钮。除了 VoxCPM2，其他模型请先打开官方仓库按 README 安装；DubCue 后续再补齐稳定的一键安装。"
+                  : "This screen no longer exposes half-finished managed install buttons. Besides VoxCPM2, install each model from its official README first; reliable one-click setup will come later."}</span>
               </div>
-              <div className="installable-hint">
-                <Sparkles size={15} />
-                <span>{installableProviders.length > 0
-                  ? (language === "zh"
-                    ? `当前可直接安装：${installableProviders.map((provider) => provider.name).join("、")}。其他模型可先查看官方仓库或用手动接入。`
-                    : `Ready to install now: ${installableProviders.map((provider) => provider.name).join(", ")}. Other models can use the repo link or manual connection first.`)
-                  : (language === "zh"
-                    ? "当前筛选没有可直接安装的模型；请切换到“轻量双语”或“查看全部模型”，也可以先手动接入。"
-                    : "No managed install is ready in this filter. Switch to Lightweight or View all, or connect manually.")}</span>
-              </div>
-              <div className="recommended-models">
-                {recommendedProviders.map((provider) => {
-                  const installForProvider = providerInstall?.providerId === provider.id ? providerInstall : null;
-                  const needsConsent = provider.id === "spark-tts";
-                  const canInstall = provider.status === "experimental" && provider.capabilities.installMode === "managed";
-                  const consented = Boolean(providerInstallConsent[provider.id]);
-                  return (
-                  <article className={`model-recommendation ${provider.status}`} key={provider.id}>
+              <div className="recommended-models simple">
+                {MODEL_PROVIDERS.map((provider) => (
+                  <article className={`model-recommendation simple ${provider.status}`} key={provider.id}>
                     <div className="model-recommendation-heading">
                       <span>
                         <strong>{provider.name}</strong>
@@ -2670,113 +2610,37 @@ function App() {
                       </span>
                       <b>{providerStatusLabel(provider)}</b>
                     </div>
-                    <p>{provider.summary[language]}</p>
-                    <div className="official-repo-strip">
-                      <span>{language === "zh" ? "官方仓库" : "Official repo"}</span>
-                      <code>{provider.repoSlug}</code>
-                    </div>
+                    <p>{providerGuideCopy(provider)}</p>
                     <div className="capability-tags">
                       {providerCapabilityTags(provider).map((tag) => <em key={tag}>{tag}</em>)}
                       <em>{commercialLabel(provider)}</em>
                     </div>
-                    <dl className="model-meta">
-                      <div><dt>{language === "zh" ? "安装难度" : "Install"}</dt><dd>{provider.installDifficulty[language]}</dd></div>
-                      <div><dt>{language === "zh" ? "硬件建议" : "Hardware"}</dt><dd>{provider.hardwareHint[language]}</dd></div>
-                      <div><dt>{language === "zh" ? "授权提示" : "License"}</dt><dd>{provider.licenseNote[language]}</dd></div>
-                    </dl>
-                    {needsConsent && (
-                      <label className="provider-consent">
-                        <input
-                          type="checkbox"
-                          checked={consented}
-                          onChange={(event) => setProviderInstallConsent((current) => ({ ...current, [provider.id]: event.target.checked }))}
-                        />
-                        <span>{language === "zh"
-                          ? "我已了解 Spark-TTS 的官方授权与音色克隆使用风险；只会使用有权使用的参考声音。"
-                          : "I understand Spark-TTS licensing and voice-cloning risks, and will only use reference voices I have rights to use."}</span>
-                      </label>
-                    )}
-                    {provider.installPlan && (
-                      <details className="install-plan" open={provider.id === "spark-tts"}>
-                        <summary>
-                          <span>{language === "zh" ? "查看将要执行的安装计划" : "Review install plan"}</span>
-                          <ChevronDown size={13} />
-                        </summary>
-                        <ol>
-                          {provider.installPlan[language].map((step) => (
-                            <li key={step}><code>{step}</code></li>
-                          ))}
-                        </ol>
-                        <p>{language === "zh"
-                          ? "DubCue 会逐步执行这些命令，并把完整输出写入故障排查日志；出错时会停在失败步骤，不继续往下跑。"
-                          : "DubCue runs these steps one by one and writes full output to diagnostics. If a step fails, it stops there."}</p>
-                      </details>
-                    )}
-                    {installForProvider && installForProvider.status !== "idle" && (
-                      <div className={`provider-install-status ${installForProvider.status}`}>
-                        <div>
-                          <strong>{installForProvider.humanMessage || installForProvider.message}</strong>
-                          <small>{installForProvider.stage} · {Math.round(installForProvider.progress * 100)}%</small>
-                        </div>
-                        <div className="provider-install-bar"><span style={{ width: `${Math.round(installForProvider.progress * 100)}%` }} /></div>
-                        <div className="provider-install-steps">
-                          {providerInstallSteps.map((step, index) => (
-                            <span className={index === providerInstallStepIndex(installForProvider) ? "active" : index < providerInstallStepIndex(installForProvider) ? "done" : ""} key={step}>{step}</span>
-                          ))}
-                        </div>
-                        {installForProvider.installDir && <small>{language === "zh" ? "安装位置：" : "Install folder: "}{installForProvider.installDir}</small>}
-                      </div>
-                    )}
+                    <div className="model-setup-line">
+                      <span>{language === "zh" ? "安装：" : "Setup:"}</span>
+                      <code>{provider.id === CURRENT_PROVIDER_ID
+                        ? (language === "zh" ? "检测本机 VoxCPM2" : "Detect local VoxCPM2")
+                        : (language === "zh" ? "打开官方仓库，按 README 安装" : "Open official repo and follow README")}</code>
+                    </div>
                     <div className="model-card-actions">
                       {provider.id === "voxcpm2" ? (
                         <button className="button primary" type="button" onClick={() => void connectDetectedRuntime()}>{language === "zh" ? "检测并连接 VoxCPM2" : "Detect and connect VoxCPM2"}</button>
-                      ) : canInstall ? (
-                        <button
-                          className="button primary"
-                          type="button"
-                          disabled={!consented || installForProvider?.status === "checking" || installForProvider?.status === "downloading" || installForProvider?.status === "installing" || installForProvider?.status === "testing"}
-                          onClick={() => void startProviderInstall(provider)}
-                        >
-                          {providerInstallButtonLabel(provider, installForProvider)}
-                        </button>
                       ) : (
-                        <button
-                          className="button secondary"
-                          type="button"
-                          onClick={() => setManualModelMode("directory")}
-                        >
-                          {language === "zh" ? "查看手动安装说明" : "Manual install guide"}
-                        </button>
+                        <a className="button secondary" href={provider.sourceUrl} onClick={openModelDocs} target="_blank" rel="noreferrer">{language === "zh" ? "打开官方仓库" : "Open repo"}</a>
                       )}
-                      <a className="model-doc-link" href={provider.sourceUrl} onClick={openModelDocs} target="_blank" rel="noreferrer">{language === "zh" ? "查看官方仓库" : "Open source repo"}</a>
+                      {provider.id === "voxcpm2" && <a className="model-doc-link" href={provider.sourceUrl} onClick={openModelDocs} target="_blank" rel="noreferrer">{language === "zh" ? "查看官方仓库" : "Open repo"}</a>}
                     </div>
                   </article>
-                  );
-                })}
+                ))}
               </div>
-              <section className="manual-model-section">
+              <section className="manual-model-section simple">
                 <div className="settings-section-heading">
-                  <strong>{language === "zh" ? "手动接入" : "Manual connection"}</strong>
-                  <small>{language === "zh" ? "如果你已经自己安装了其他模型，可以先用高级入口接入；DubCue 会在后续版本补全自动适配器。" : "If you have already installed another model, use an advanced entry first; DubCue will add managed adapters in later versions."}</small>
+                  <strong>{language === "zh" ? "安装好之后怎么接入？" : "How to connect after installing?"}</strong>
+                  <small>{language === "zh" ? "先让模型在本机跑通。下一步 DubCue 会开放三种接入口：模型目录、本地服务 API、自定义适配器。" : "First make sure the model runs locally. DubCue will then expose three connection paths: model folder, local API, and custom adapter."}</small>
                 </div>
-                <div className="manual-model-tabs">
-                  {[
-                    ["directory", language === "zh" ? "选择模型目录" : "Model folder"],
-                    ["api", language === "zh" ? "连接本地服务 API" : "Local service API"],
-                    ["adapter", language === "zh" ? "导入自定义适配器" : "Custom adapter"],
-                  ].map(([id, label]) => (
-                    <button className={manualModelMode === id ? "active" : ""} type="button" key={id} onClick={() => setManualModelMode(id as "directory" | "api" | "adapter")}>{label}</button>
-                  ))}
-                </div>
-                <div className="manual-model-placeholder">
-                  <strong>{manualModelMode === "directory"
-                    ? (language === "zh" ? "从本地目录识别模型能力" : "Detect capabilities from a local folder")
-                    : manualModelMode === "api"
-                      ? (language === "zh" ? "连接 OpenAI/HTTP 风格的本地 TTS 服务" : "Connect an OpenAI/HTTP-style local TTS service")
-                      : (language === "zh" ? "加载 DubCue provider adapter" : "Load a DubCue provider adapter")}</strong>
-                  <p>{language === "zh"
-                    ? "0.6.0.0 先提供入口和能力模型；实际文件选择、API 校验和适配器沙箱将在后续实现。"
-                    : "0.6.0.0 provides the entry point and capability model first; file picking, API validation, and adapter sandboxing will follow."}</p>
+                <div className="manual-entry-actions" aria-label={language === "zh" ? "后续接入方式" : "Upcoming connection paths"}>
+                  <span>{language === "zh" ? "模型目录" : "Model folder"}</span>
+                  <span>{language === "zh" ? "本地服务 API" : "Local API"}</span>
+                  <span>{language === "zh" ? "自定义适配器" : "Custom adapter"}</span>
                 </div>
               </section>
               <div className="dialog-actions">
